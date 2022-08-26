@@ -2,9 +2,9 @@
 
 import os
 import requests
+from requests.exceptions import HTTPError
 import time
 import urllib.parse
-from requests.exceptions import HTTPError
 import re
 import json
 import argparse
@@ -25,7 +25,9 @@ SRR15736787
 'PRJNA761299 OR SRR15736787'
 ''')
 parser.add_argument("-o","--output", type=str, default=cwd, help="Output directory to store the results. (default: %(default)s)")
-parser.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help="'quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata. (default: %(default)s)")
+parser.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata.
+'Full' mode might not work with all complex queries. (default: %(default)s)
+''')
 args = parser.parse_args()
 
 
