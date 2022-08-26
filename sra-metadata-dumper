@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+
+import os
+import requests
+import time
+import urllib.parse
+from requests.exceptions import HTTPError
+import re
+import json
+import argparse
+import xmltodict
+
+
+cwd = os.getcwd()
+output_json_directory=cwd+'/metadata/json'
+if not os.path.exists(output_json_directory):
+    os.makedirs(output_json_directory)
+
+
+parser = argparse.ArgumentParser(description="Command line utility to fetch metadata from the NCBI SRA database.",formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA. Please use quotes '' if the query contains multiple words. eg:
+PRJNA868738
+SRR15736787
+'"arabidopsis thaliana"[Organism] AND (2010[Publication Date] : 2011[Publication Date])'
+'PRJNA761299 OR SRR15736787'
+''')
+parser.add_argument("-o","--output", type=str, default=cwd, help="Output directory to store the results. (default: %(default)s)")
+parser.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help="'quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata. (default: %(default)s)")
+args = parser.parse_args()
+
+
+esearch_base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi'
+esummary_base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi'
+elink_base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi'
+
+
+failed_runs=[]
+
+
+def make_request (url,params) :
+    retries = 1
+    success = False
+    while not success and retries <= 5:
+        try:
+            response = requests.post(url, params=params)
+            jsonResponse = response.json(strict=False)
+            return (jsonResponse)
+            success = True
+        except Exception as err:
+            print(f'{err}')
+            wait = retries * 2
+            print (f"Retrying attempt {retries}")
+            time.sleep(wait)
+            retries+=1
+
+
+def convert_sra_uids_to_biosample_uids(uids):
+    # to prevent conversion of comma to % ( preventing conversion of 15949297,15949296 => 15949297%15949296 in the url)
+    elink_params = urllib.parse.urlencode({'dbfrom':'sra','db':'biosample','retmode':'json','id':uids}, safe=',')
+    biosample_uids=[]
+    # print(elink_base_url,elink_params)
+    sra_to_biosample_response = make_request(elink_base_url,elink_params)
+    if type(sra_to_biosample_response['linksets']) == list:
+        if type(sra_to_biosample_response['linksets'][0]['linksetdbs']) == list:
+            if (sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links']):
+                biosample_uids = ",".join(sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links'])
+                return biosample_uids
+
+
+def write_quick_json(run_to_sam_accn, run_info_items):
+    for run in run_to_sam_accn:
+        if run in run_info_items:
+            combined_run_level_dict={'run':run_info_items[run]}
+            json_string = json.dumps(combined_run_level_dict,indent=4)
+            print(f"[Writing {output_json_directory}/{run}.json]", end='\r')
+            with open(f"{output_json_directory}/{run}.json", "w") as outfile:
+                outfile.write(json_string)
+        else:
+            failed_runs.append(run)
+
+
+def write_full_json(run_to_sam_accn, run_info_items,sample_info_items):
+    for run in run_to_sam_accn:
+        if (run in run_info_items) and (run_to_sam_accn[run] in sample_info_items):
+            combined_run_level_dict={'run':run_info_items[run],'sample':sample_info_items[run_to_sam_accn[run]]}
+            json_string = json.dumps(combined_run_level_dict,indent=4)
+            print(f"[Writing {output_json_directory}/{run}.json]", end='\r')
+            with open(f"{output_json_directory}/{run}.json", "w") as outfile:
+                outfile.write(json_string)
+        else:
+            failed_runs.append(run)
+
+
+def parse_sample_info(sample_json):
+    sra_accn=None
+    sample_info_dict={}
+    for id in sample_json:
+        if id != 'uids':
+            try:
+                # using "dict_constructor" parameter to avoid OrderedDict output
+                sampledata = xmltodict.parse('<document>'+sample_json[id]['sampledata']+'</document>',dict_constructor=dict)
+                identifiers = xmltodict.parse('<document>'+sample_json[id]['identifiers']+'</document>',dict_constructor=dict)
+                if identifiers['document']:
+                    identifiers_items = re.split(r'; ', identifiers['document'])
+                    for ident in identifiers_items:
+                        id_type,id_accn = re.split(r': ', ident)
+                        if (id_type == 'SRA'):
+                            sra_accn = id_accn
+                if (sampledata['document']) and (sra_accn is not None):
+                    sample_info_dict[sra_accn]=sampledata['document']
+            except:
+                print(f"Error parsing {id}")
+    return (sample_info_dict)
+
+
+def parse_run_info(run_json):
+    run_to_sample_ids={}
+    run_info_dict={}
+    for id in run_json:
+        if id != 'uids':
+            try:
+                # using "dict_constructor" parameter to avoid OrderedDict output
+                expxml = xmltodict.parse('<document>'+run_json[id]['expxml']+'</document>',dict_constructor=dict)
+                runs = xmltodict.parse('<document>'+run_json[id]['runs']+'</document>',dict_constructor=dict)
+                sample_accn=None
+                if expxml['document']['Sample']['@acc']:
+                    sample_accn=expxml['document']['Sample']['@acc']
+                if type(runs['document']['Run']) == list:
+                    for run in runs['document']['Run']:
+                        run_to_sample_ids[run['@acc']] = sample_accn
+                        run_info_dict[run['@acc']]={'total_spots':run['@total_spots'],'total_bases':run['@total_bases'],'exp_info':expxml}
+                else:
+                    run_to_sample_ids[runs['document']['Run']['@acc']]=sample_accn
+                    run_info_dict[runs['document']['Run']['@acc']]={'total_spots':runs['document']['Run']['@total_spots'],'total_bases':runs['document']['Run']['@total_bases'],'exp_info':expxml}
+            except:
+                print(f"Error parsing {id}")
+    return (run_info_dict,run_to_sample_ids)
+
+
+def split_list(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+
+def create_query(term):
+    esearch_params = {'db': 'sra','usehistory':'y','retmode':'json','term':term}
+    esearch_response = make_request(esearch_base_url,esearch_params)
+    if esearch_response['esearchresult']:
+        total_result = int(esearch_response['esearchresult']['count'])
+        querykey = esearch_response['esearchresult']['querykey']
+        webenv = esearch_response['esearchresult']['webenv']
+        results_idx = [*range(total_result+1)]
+        all_sra_uids =[]
+        # chunks of 500 ids => since the index is starting from 0, 'retmax' should be 499
+        chunks = list(split_list(results_idx, 500)) 
+        print (f"Found total {total_result} results.")
+        if total_result > 500:
+            print (f"Creating batch queries due to esearch API's limitation.")
+        for set, chunk in enumerate(chunks):
+            try:
+                sra_uids=None
+                biosample_uids=None
+                sample_json=None
+                run_json=None
+                # since the chunk index is starting from 0, 'retmax' should be 499
+                sra_esummary_params = {'db': 'sra','retmode':'json','query_key':querykey,'WebEnv':webenv,'retstart':chunk[0],'retmax':499}
+                sra_esummary_response = make_request(esummary_base_url,sra_esummary_params)
+                if sra_esummary_response['result']:
+                    run_json = sra_esummary_response['result']
+                    sra_uids = ",".join(sra_esummary_response['result']['uids'])
+                    if args.mode == 'full':
+                        if sra_uids is not None:
+                            biosample_uids = convert_sra_uids_to_biosample_uids(sra_uids)
+                        if biosample_uids is not None:
+                            biosample_esummary_params = urllib.parse.urlencode({'dbfrom':'sra','db':'biosample','retmode':'json','id':biosample_uids}, safe=',')
+                            biosample_response = make_request(esummary_base_url,biosample_esummary_params)
+                            if (biosample_response['result']):
+                                sample_json = biosample_response['result']
+                        if run_json is not None and sample_json is not None:
+                            runinfo, run_to_sample_ids = parse_run_info(run_json)
+                            saminfo = parse_sample_info(sample_json)
+                            write_full_json(run_to_sample_ids,runinfo,saminfo)
+                            print('')
+                            print (f"Finished query set [{set+1}/{len(chunks)}]")
+                    else:
+                        if run_json is not None:
+                            runinfo, run_to_sample_ids = parse_run_info(run_json)
+                            write_quick_json(run_to_sample_ids,runinfo)
+                            print('')
+                            print (f"Finished query set [{set+1}/{len(chunks)}]")
+            except:
+                print (f"Error generating summary from query set [{set+1}/{len(chunks)}].")
+
+
+if args.query:
+    q_term = args.query.strip()
+    create_query(q_term)
+    if (len(failed_runs)>0):
+        with open(f"{output_json_directory}/failed_to_parse.txt", "w") as failed:
+            failed.write('\n'.join(failed_runs))
+        print(f"Check {output_json_directory}/failed_to_parse.txt for errors.")
