@@ -1,5 +1,5 @@
-./old
-./metadata
+old/
+metadata/
 .json
 
 .env
