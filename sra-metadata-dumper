@@ -18,9 +18,7 @@ if not os.path.exists(output_json_directory):
 
 
 parser = argparse.ArgumentParser(add_help=False,description="Command line utility to fetch metadata from the NCBI SRA database.",formatter_class=argparse.RawTextHelpFormatter)
-
 required = parser.add_argument_group('required arguments')
-
 optional = parser.add_argument_group('optional arguments')
 
 required.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA.
@@ -40,7 +38,6 @@ optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default
 'Full' mode might not work with all complex queries. (default: %(default)s)
 
 ''')
-
 optional.add_argument("-h", "--help", action='help', default=argparse.SUPPRESS, help='''Show this help message and exit.
 
 '''
