@@ -17,8 +17,13 @@ if not os.path.exists(output_json_directory):
     os.makedirs(output_json_directory)
 
 
-parser = argparse.ArgumentParser(description="Command line utility to fetch metadata from the NCBI SRA database.",formatter_class=argparse.RawTextHelpFormatter)
-parser.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA.
+parser = argparse.ArgumentParser(add_help=False,description="Command line utility to fetch metadata from the NCBI SRA database.",formatter_class=argparse.RawTextHelpFormatter)
+
+required = parser.add_argument_group('required arguments')
+
+optional = parser.add_argument_group('optional arguments')
+
+required.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA.
 Please use quotes '' if the query contains multiple words. eg:
     PRJNA868738
     SRR15736787
@@ -28,13 +33,19 @@ Please use quotes '' if the query contains multiple words. eg:
 Please refer https://www.ncbi.nlm.nih.gov/sra/docs/srasearch/ to learn more about basic and advanced search in NCBI SRA.
 
 ''')
-parser.add_argument("-o","--output", type=str, default=cwd, help='''Output directory to store the results. (default: %(default)s)
+optional.add_argument("-o","--output", type=str, default=cwd, help='''Output directory to store the results. (default: %(default)s)
 
 ''')
-parser.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata.
+optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata.
 'Full' mode might not work with all complex queries. (default: %(default)s)
 
 ''')
+
+optional.add_argument("-h", "--help", action='help', default=argparse.SUPPRESS, help='''Show this help message and exit.
+
+'''
+)
+
 args = parser.parse_args()
 
 
