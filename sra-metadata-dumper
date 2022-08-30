@@ -17,7 +17,20 @@ if not os.path.exists(output_json_directory):
     os.makedirs(output_json_directory)
 
 
-parser = argparse.ArgumentParser(add_help=False,description="Command line utility to fetch metadata from the NCBI SRA database.",formatter_class=argparse.RawTextHelpFormatter)
+parser = argparse.ArgumentParser(add_help=False,description='''
+About:   A command line utility to fetch metadata from the NCBI SRA database.
+Author:  Anand Maurya
+Version: 1.0.0
+
+''',formatter_class=argparse.RawTextHelpFormatter, epilog='''additional information:
+    Uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level metadata from the SRA database.
+    Learn more about E-Utilities here: https://www.ncbi.nlm.nih.gov/books/NBK25499/
+    
+having issues?
+    Check your internet connection.
+    Find the "failed_to_parse.txt" file in the output directory. It contains a list of run accessions that most likely have incorrect or missing metadata in SRA.
+    
+''')
 required = parser.add_argument_group('required arguments')
 optional = parser.add_argument_group('optional arguments')
 
