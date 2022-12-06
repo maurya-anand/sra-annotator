@@ -9,18 +9,15 @@ import re
 import json
 import argparse
 import xmltodict
-
+import pandas
 
 cwd = os.getcwd()
-output_json_directory=cwd+'/metadata/json'
-if not os.path.exists(output_json_directory):
-    os.makedirs(output_json_directory)
-
+cwd = os.path.abspath(cwd)
 
 parser = argparse.ArgumentParser(add_help=False,description='''
 About:   A command line utility to fetch metadata from the NCBI SRA database.
 Author:  Anand Maurya
-Version: 1.0.0
+Version: 1.1.0
 
 ''',formatter_class=argparse.RawTextHelpFormatter, epilog='''additional information:
     Uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level metadata from the SRA database.
@@ -29,10 +26,11 @@ Version: 1.0.0
 having issues?
     Check your internet connection.
     Find the "failed_to_parse.txt" file in the output directory. It contains a list of run accessions that most likely have incorrect or missing metadata in SRA.
-    
+
 ''')
 required = parser.add_argument_group('required arguments')
 optional = parser.add_argument_group('optional arguments')
+addnl_flag = parser.add_mutually_exclusive_group()
 
 required.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA.
 Please use quotes '' if the query contains multiple words. eg:
@@ -47,8 +45,11 @@ Please refer https://www.ncbi.nlm.nih.gov/sra/docs/srasearch/ to learn more abou
 optional.add_argument("-o","--output", type=str, default=cwd, help='''Output directory to store the results. (default: %(default)s)
 
 ''')
-optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata.
+optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata. 'Full' converts the metadata from JSON to CSV for each run accession.
 'Full' mode might not work with all complex queries. (default: %(default)s)
+
+''')
+addnl_flag.add_argument("-f","--fastq", action='store_true', help='''Locate the web address to the raw data and generate a script to download the fastq file(s). Depending on the number of fastq files to be searched, this can take some time.
 
 ''')
 optional.add_argument("-h", "--help", action='help', default=argparse.SUPPRESS, help='''Show this help message and exit.
@@ -65,7 +66,21 @@ elink_base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi'
 
 
 failed_runs=[]
+completed_runs=[]
 
+output_json_directory=None
+output_table_directory=None
+output_data_directory=None
+
+if args.output:
+    out_dir = args.output.strip()
+    if not os.path.exists(out_dir):
+        out_dir = cwd
+    else:
+        out_dir= os.path.abspath(out_dir)
+    output_json_directory=out_dir+'/sra_browser/metadata_json'
+    output_table_directory=out_dir+'/sra_browser/metadata_text'
+    output_data_directory=out_dir+'/sra_browser/fastq_source'
 
 def make_request (url,params) :
     retries = 1
@@ -102,9 +117,10 @@ def write_quick_json(run_to_sam_accn, run_info_items):
         if run in run_info_items:
             combined_run_level_dict={'run':run_info_items[run]}
             json_string = json.dumps(combined_run_level_dict,indent=4)
-            print(f"[Writing {output_json_directory}/{run}.json]", end='\r')
+            print(f"Writing for {run}", end='\r')
             with open(f"{output_json_directory}/{run}.json", "w") as outfile:
                 outfile.write(json_string)
+                completed_runs.append(run)
         else:
             failed_runs.append(run)
 
@@ -114,9 +130,18 @@ def write_full_json(run_to_sam_accn, run_info_items,sample_info_items):
         if (run in run_info_items) and (run_to_sam_accn[run] in sample_info_items):
             combined_run_level_dict={'run':run_info_items[run],'sample':sample_info_items[run_to_sam_accn[run]]}
             json_string = json.dumps(combined_run_level_dict,indent=4)
-            print(f"[Writing {output_json_directory}/{run}.json]", end='\r')
+
+            normalized_data = pandas.json_normalize(combined_run_level_dict)
+            dataframe = pandas.DataFrame(normalized_data)
+            dataframe.insert(0, column = "run", value = run)
+            
+            print(f"Writing output for {run}", end='\r')
             with open(f"{output_json_directory}/{run}.json", "w") as outfile:
                 outfile.write(json_string)
+                completed_runs.append(run)
+            
+            tab_file = f"{output_table_directory}/{run}.csv"
+            dataframe.to_csv(tab_file,index=False)
         else:
             failed_runs.append(run)
 
@@ -172,6 +197,38 @@ def split_list(lst, n):
         yield lst[i:i + n]
 
 
+def download_sra(run_accn):
+    file_url = (f"https://www.ebi.ac.uk/ena/portal/api/filereport?result=read_run&fields=fastq_ftp,sra_ftp&format=JSON&accession={run_accn}")
+    out_file_name = (f"{output_data_directory}/{run_accn}.fastq.download.sh")
+    if not os.path.exists(out_file_name):
+        response = requests.get(file_url, stream = True)
+        jsonResponse = response.json(strict=False)
+        fastq1=None
+        fastq2=None
+        fastq1_out=None
+        fastq2_out=None
+        if isinstance(jsonResponse, list):
+            for json_set in jsonResponse:
+                if json_set['fastq_ftp']:
+                    if ';' in json_set['fastq_ftp']:
+                        fastq1,fastq2=json_set['fastq_ftp'].split(';')
+                        break
+                    else:
+                        fastq1 =json_set['fastq_ftp']
+            if (fastq1):
+                fastq1_out=fastq1.split('/')[-1]
+            if (fastq2):
+                fastq2_out=fastq2.split('/')[-1]
+            
+            with open(out_file_name,"w") as download:
+                download.write('#!/usr/bin/env bash\n')
+                download.write(f"curl -L {fastq1} -o {output_data_directory}/{fastq1_out}\n")
+                if (fastq2):
+                    download.write(f"curl -L {fastq2} -o {output_data_directory}/{fastq2_out}\n")
+        else:
+            print ("Unable to locate the raw data. INVALID RESPONSE : ", jsonResponse)
+
+
 def create_query(term):
     esearch_params = {'db': 'sra','usehistory':'y','retmode':'json','term':term}
     esearch_response = make_request(esearch_base_url,esearch_params)
@@ -199,6 +256,10 @@ def create_query(term):
                     run_json = sra_esummary_response['result']
                     sra_uids = ",".join(sra_esummary_response['result']['uids'])
                     if args.mode == 'full':
+                        if not os.path.exists(output_json_directory):
+                                os.makedirs(output_json_directory)
+                        if not os.path.exists(output_table_directory):
+                            os.makedirs(output_table_directory)
                         if sra_uids is not None:
                             biosample_uids = convert_sra_uids_to_biosample_uids(sra_uids)
                         if biosample_uids is not None:
@@ -214,6 +275,8 @@ def create_query(term):
                             print (f"Finished query set [{set+1}/{len(chunks)}]")
                     else:
                         if run_json is not None:
+                            if not os.path.exists(output_json_directory):
+                                os.makedirs(output_json_directory)
                             runinfo, run_to_sample_ids = parse_run_info(run_json)
                             write_quick_json(run_to_sample_ids,runinfo)
                             print('')
@@ -229,3 +292,12 @@ if args.query:
         with open(f"{output_json_directory}/failed_to_parse.txt", "w") as failed:
             failed.write('\n'.join(failed_runs))
         print(f"Check {output_json_directory}/failed_to_parse.txt for errors.")
+    if args.fastq:
+        if not os.path.exists(output_data_directory):
+            os.makedirs(output_data_directory)
+        for run in completed_runs:
+            print (f"Locating fastq file(s) for {run}", end='\r')
+            try:
+                download_sra(run)
+            except:
+                print (f"Couldn't locate fastq file(s) for {run}", end='\n')
