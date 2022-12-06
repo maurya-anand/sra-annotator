@@ -18,4 +18,4 @@ It uses NCBI's Entrez Programming Utilities under the hood to query and retrieve
 
 # Usage details:
 
-<https://github.com/maurya-anand/sra-metadata-explorer/wiki>
+Checkout the [Wiki page](https://github.com/maurya-anand/sra-metadata-explorer/wiki "Wiki") for more details.
