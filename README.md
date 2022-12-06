@@ -10,7 +10,11 @@ It uses NCBI's Entrez Programming Utilities under the hood to query and retrieve
 
 # Quick start:
 
-    sra-metadata-explorer -q QUERY [-o OUTPUT] [-m {quick,full}] [-f] [-h]
+    sra-metadata-explorer -q <QUERY> [-o <OUTPUT>] [-m <quick or full>] [-f] [-h]
+
+-   `-q` is mandatory
+
+-   arguments shown in `[]` are optional
 
 # Usage details:
 
