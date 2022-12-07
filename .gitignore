@@ -1,7 +1,7 @@
 old/
 sra_browser/
 .json
-
+.Rhistory
 .env
 .venv
 env/
