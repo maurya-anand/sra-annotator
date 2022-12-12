@@ -15,17 +15,17 @@ cwd = os.getcwd()
 cwd = os.path.abspath(cwd)
 
 parser = argparse.ArgumentParser(add_help=False,description='''
-About:   A command line utility to fetch metadata from the NCBI SRA database.
+About:   A command line utility to fetch annotation from the NCBI SRA database.
 Author:  Anand Maurya
 Version: 1.1.0
 
 ''',formatter_class=argparse.RawTextHelpFormatter, epilog='''additional information:
-    Uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level metadata from the SRA database.
+    Uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level annotation from the SRA database.
     Learn more about E-Utilities here: https://www.ncbi.nlm.nih.gov/books/NBK25499/
     
 having issues?
     Check your internet connection.
-    Find the "failed_to_parse.txt" file in the output directory. It contains a list of run accessions that most likely have incorrect or missing metadata in SRA.
+    Find the "failed_to_parse.txt" file in the output directory. It contains a list of run accessions that most likely have incorrect or missing annotation in SRA.
 
 ''')
 required = parser.add_argument_group('required arguments')
@@ -45,7 +45,7 @@ Please refer https://www.ncbi.nlm.nih.gov/sra/docs/srasearch/ to learn more abou
 optional.add_argument("-o","--output", type=str, default=cwd, help='''Output directory to store the results. (default: %(default)s)
 
 ''')
-optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level metadata, whereas 'full' mode attempts to retrieve both the run level and sample level metadata. 'Full' converts the metadata from JSON to CSV for each run accession.
+optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level annotation, whereas 'full' mode attempts to retrieve both the run level and sample level annotation. 'Full' converts the annotation from JSON to CSV for each run accession.
 'Full' mode might not work with all complex queries. (default: %(default)s)
 
 ''')
@@ -78,8 +78,8 @@ if args.output:
         out_dir = cwd
     else:
         out_dir= os.path.abspath(out_dir)
-    output_json_directory=out_dir+'/sra_browser/metadata_json'
-    output_table_directory=out_dir+'/sra_browser/metadata_text'
+    output_json_directory=out_dir+'/sra_browser/annotation_json'
+    output_table_directory=out_dir+'/sra_browser/annotation_text'
     output_data_directory=out_dir+'/sra_browser/fastq_source'
 
 def make_request (url,params) :
