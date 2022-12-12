@@ -78,9 +78,9 @@ if args.output:
         out_dir = cwd
     else:
         out_dir= os.path.abspath(out_dir)
-    output_json_directory=out_dir+'/sra_browser/annotation_json'
-    output_table_directory=out_dir+'/sra_browser/annotation_text'
-    output_data_directory=out_dir+'/sra_browser/fastq_source'
+    output_json_directory=out_dir+'/sra_data/annotation_json'
+    output_table_directory=out_dir+'/sra_data/annotation_text'
+    output_data_directory=out_dir+'/sra_data/fastq_source'
 
 def make_request (url,params) :
     retries = 1
