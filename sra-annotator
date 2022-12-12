@@ -15,7 +15,7 @@ cwd = os.getcwd()
 cwd = os.path.abspath(cwd)
 
 parser = argparse.ArgumentParser(add_help=False,description='''
-About:   A command line utility to fetch annotation from the NCBI SRA database.
+About:   A command-line tool for retrieving annotations from the NCBI SRA database.
 Author:  Anand Maurya
 Version: 1.1.0
 
