@@ -1,0 +1,6 @@
+{
+  "seedling": ["seedling", "seedlings"],
+  "flower": ["flower", "flowers", "floral", "buds", "petals"],
+  "leaf": ["leaves", "leaf"],
+  "freetext": "transcriptome"
+}

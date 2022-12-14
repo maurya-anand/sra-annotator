@@ -10,14 +10,25 @@ import json
 import argparse
 import xmltodict
 import pandas
+import re
+
 
 cwd = os.getcwd()
 cwd = os.path.abspath(cwd)
 
+
+def validate_file(f):
+    if not os.path.exists(f):
+        # Argparse uses the ArgumentTypeError to give a rejection message like:
+        # # error: argument input: x does not exist
+        raise argparse.ArgumentTypeError("File {0} does not exist".format(f))
+    return f
+
+
 parser = argparse.ArgumentParser(add_help=False,description='''
 About:   A command-line tool for retrieving annotations from the NCBI SRA database.
 Author:  Anand Maurya
-Version: 1.1.0
+Version: 1.2.0
 
 ''',formatter_class=argparse.RawTextHelpFormatter, epilog='''additional information:
     Uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level annotation from the SRA database.
@@ -28,11 +39,16 @@ having issues?
     Find the "failed_to_parse.txt" file in the output directory. It contains a list of run accessions that most likely have incorrect or missing annotation in SRA.
 
 ''')
-required = parser.add_argument_group('required arguments')
-optional = parser.add_argument_group('optional arguments')
-addnl_flag = parser.add_mutually_exclusive_group()
 
-required.add_argument("-q","--query", type=str, required=True, help='''Query string to search the SRA.
+
+# using this order of declaration in order to group them in the help message
+optional = parser.add_argument_group('OPTIONAL')
+required = parser.add_argument_group('REQUIRED')
+addnl_flag = parser.add_mutually_exclusive_group()
+parser._optionals.title = "POSITIONAL"
+
+
+required.add_argument("query", help='''Query string to search the SRA.
 Please use quotes '' if the query contains multiple words. eg:
     PRJNA868738
     SRR15736787
@@ -42,21 +58,46 @@ Please use quotes '' if the query contains multiple words. eg:
 Please refer https://www.ncbi.nlm.nih.gov/sra/docs/srasearch/ to learn more about basic and advanced search in NCBI SRA.
 
 ''')
+
+
+required.add_argument("-q", "--query", action="store_true", help='''List query SRA accessions in plain text file.
+Please make sure that the file contains one accession per line. 
+''')
+# "-q", "--treat-as-file"
+
+
 optional.add_argument("-o","--output", type=str, default=cwd, help='''Output directory to store the results. (default: %(default)s)
 
 ''')
+
+
 optional.add_argument("-m","--mode", type=str, choices=['quick','full'], default='quick', help=''''quick' mode dumps the run level annotation, whereas 'full' mode attempts to retrieve both the run level and sample level annotation. 'Full' converts the annotation from JSON to CSV for each run accession.
 'Full' mode might not work with all complex queries. (default: %(default)s)
 
 ''')
-addnl_flag.add_argument("-f","--fastq", action='store_true', help='''Locate the web address to the raw data and generate a script to download the fastq file(s). Depending on the number of fastq files to be searched, this can take some time.
+
+
+optional.add_argument("-f","--fastq", action='store_true', help='''Locate the web address to the raw data and generate a script to download the fastq file(s). Depending on the number of fastq files to be searched, this can take some time.
 
 ''')
+
+
+addnl_flag.add_argument("-d","--dictionary", required=False, type=validate_file, help='''Use the designated keywords from the file to identify the samples.
+
+''')
+
+
+parser.add_argument('-v','--version', action='version', version='%(prog)s 1.2.0')
+
+
 optional.add_argument("-h", "--help", action='help', default=argparse.SUPPRESS, help='''Show this help message and exit.
 
 '''
 )
 
+
+# reorder the items in the parser._action_groups list, to reorder the groups in the display
+parser._action_groups.reverse()
 args = parser.parse_args()
 
 
@@ -68,9 +109,12 @@ elink_base_url = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi'
 failed_runs=[]
 completed_runs=[]
 
+
 output_json_directory=None
 output_table_directory=None
 output_data_directory=None
+output_stats_directory=None
+
 
 if args.output:
     out_dir = args.output.strip()
@@ -81,6 +125,8 @@ if args.output:
     output_json_directory=out_dir+'/sra_data/annotation_json'
     output_table_directory=out_dir+'/sra_data/annotation_text'
     output_data_directory=out_dir+'/sra_data/fastq_source'
+    output_stats_directory=out_dir+'/sra_data/'
+
 
 def make_request (url,params) :
     retries = 1
@@ -285,13 +331,68 @@ def create_query(term):
                 print (f"Error generating summary from query set [{set+1}/{len(chunks)}].")
 
 
+def find_matches (query_term):
+    hits_found=[]
+    for run in completed_runs:
+        with open (f"{output_json_directory}/{run}.json") as json_content:
+            for line in json_content:
+                if re.search(query_term,line,re.IGNORECASE):
+                    if run not in hits_found:
+                        hits_found.append(run)
+                    break
+    return (hits_found)
+
+
 if args.query:
-    q_term = args.query.strip()
-    create_query(q_term)
-    if (len(failed_runs)>0):
-        with open(f"{output_json_directory}/failed_to_parse.txt", "w") as failed:
-            failed.write('\n'.join(failed_runs))
-        print(f"Check {output_json_directory}/failed_to_parse.txt for errors.")
+    if not os.path.exists(args.query):
+        q_term = args.query.strip()
+        create_query(q_term)
+        if (len(failed_runs)>0):
+            with open(f"{output_stats_directory}/failed_to_parse.txt", "w") as failed:
+                failed.write('\n'.join(failed_runs))
+            print(f"Check {output_stats_directory}/failed_to_parse.txt for errors.")
+    else:
+        inp_ids=[]
+        with open(args.query, "r") as list_inp:
+            q_list = list_inp.readlines()
+            for q_terms in q_list:
+                inp_ids.append(q_terms.strip())
+        q_term = ' OR '.join(inp_ids)
+        create_query(q_term)
+        if (len(failed_runs)>0):
+            with open(f"{output_stats_directory}/failed_to_parse.txt", "w") as failed:
+                failed.write('\n'.join(failed_runs))
+            print(f"Check {output_stats_directory}/failed_to_parse.txt for errors.")
+    
+    if args.dictionary:
+        hits_table_file = (f"{output_stats_directory}/keyword_hits.csv")
+        patterns=None
+        with open(args.dictionary, 'r') as keywords:
+            patterns = json.loads(keywords.read())
+        hits_dict={}
+        for category,qnames in patterns.items():
+            if isinstance(qnames, list):
+                for word in qnames:
+                    if find_matches(word):
+                        if not category in hits_dict:
+                            hits_dict[category]=find_matches(word)
+                        else:
+                            hits_dict[category]= hits_dict[category]+find_matches(word)
+            elif isinstance(qnames, str):
+                if find_matches(qnames):
+                    if not category in hits_dict:
+                        hits_dict[category]=find_matches(qnames)
+                    else:
+                        hits_dict[category]= hits_dict[category]+find_matches(qnames)
+            else:
+                print (f"Nested dictinary not allowed. {qnames}")
+        hits_tab_norm = {}
+        for header, vals in hits_dict.items():
+            hits_tab_norm[header]=list(set(vals))
+        hits_tab = pandas.DataFrame.from_dict(hits_tab_norm, orient='index').transpose() 
+        hits_tab.to_csv(hits_table_file, index=False,encoding='utf-8',na_rep='-')
+        print (f"Samples containing specific keywords can be found in : {hits_table_file}")
+
     if args.fastq:
         if not os.path.exists(output_data_directory):
             os.makedirs(output_data_directory)
@@ -301,3 +402,5 @@ if args.query:
                 download_sra(run)
             except:
                 print (f"Couldn't locate fastq file(s) for {run}", end='\n')
+else:
+    print (f"Invalid input.", end='\n')
