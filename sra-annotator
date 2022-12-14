@@ -82,7 +82,7 @@ optional.add_argument("-f","--fastq", action='store_true', help='''Locate the we
 ''')
 
 
-addnl_flag.add_argument("-d","--dictionary", required=False, type=validate_file, help='''Use the designated keywords from the file to identify the samples.
+addnl_flag.add_argument("-d","--dictionary", required=False, type=validate_file, help='''Use the designated keywords from the JSON file to identify the samples.
 
 ''')
 
