@@ -404,4 +404,4 @@ if args.query:
             except:
                 print (f"Couldn't locate fastq file(s) for {run}", end='\n')
 else:
-    print (f"Invalid input.", end='\n')
+    print (f"Invalid input provided.", end='\n')
