@@ -291,7 +291,8 @@ def create_query(term):
         all_sra_uids =[]
         # chunks of 500 ids => since the index is starting from 0, 'retmax' should be 499
         chunks = list(split_list(results_idx, 500)) 
-        print (f"Found total {total_result} results.")
+        # print (f"Found total {total_result} results.")
+        print (f"Parsing the response from the server.")
         if total_result > 500:
             print (f"Creating batch queries due to esearch API's limitation.")
         for set, chunk in enumerate(chunks):
