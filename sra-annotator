@@ -18,8 +18,6 @@ cwd = os.path.abspath(cwd)
 
 def validate_file(f):
     if not os.path.exists(f):
-        # Argparse uses the ArgumentTypeError to give a rejection message like:
-        # # error: argument input: x does not exist
         raise argparse.ArgumentTypeError("File {0} does not exist".format(f))
     return f
 
@@ -153,10 +151,9 @@ def convert_sra_uids_to_biosample_uids(uids):
     # to prevent conversion of comma to % ( preventing conversion of 15949297,15949296 => 15949297%15949296 in the url)
     elink_params = urllib.parse.urlencode({'dbfrom':'sra','db':'biosample','retmode':'json','id':uids}, safe=',')
     biosample_uids=[]
-    # print(elink_base_url,elink_params)
     sra_to_biosample_response = make_request(elink_base_url,elink_params)
-    if type(sra_to_biosample_response['linksets']) == list:
-        if type(sra_to_biosample_response['linksets'][0]['linksetdbs']) == list:
+    if isinstance(sra_to_biosample_response['linksets'], list):
+        if isinstance(sra_to_biosample_response['linksets'][0]['linksetdbs'], list):
             if (sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links']):
                 biosample_uids = ",".join(sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links'])
                 return biosample_uids
@@ -180,16 +177,13 @@ def write_full_json(run_to_sam_accn, run_info_items,sample_info_items):
         if (run in run_info_items) and (run_to_sam_accn[run] in sample_info_items):
             combined_run_level_dict={'run':run_info_items[run],'sample':sample_info_items[run_to_sam_accn[run]]}
             json_string = json.dumps(combined_run_level_dict,indent=4)
-
             normalized_data = pandas.json_normalize(combined_run_level_dict)
             dataframe = pandas.DataFrame(normalized_data)
             dataframe.insert(0, column = "run", value = run)
-            
             print(f"Writing output for {run}", end='\r')
             with open(f"{output_json_directory}/{run}.json", "w") as outfile:
                 outfile.write(json_string)
                 completed_runs.append(run)
-            
             tab_file = f"{output_table_directory}/{run}.csv"
             dataframe.to_csv(tab_file,index=False)
         else:
@@ -230,7 +224,7 @@ def parse_run_info(run_json):
                 sample_accn=None
                 if expxml['document']['Sample']['@acc']:
                     sample_accn=expxml['document']['Sample']['@acc']
-                if type(runs['document']['Run']) == list:
+                if isinstance(runs['document']['Run'], list):
                     for run in runs['document']['Run']:
                         run_to_sample_ids[run['@acc']] = sample_accn
                         run_info_dict[run['@acc']]={'total_spots':run['@total_spots'],'total_bases':run['@total_bases'],'exp_info':expxml}
@@ -271,7 +265,6 @@ def download_sra(run_accn):
                 fastq1_out=fastq1.split('/')[-1]
             if (fastq2):
                 fastq2_out=fastq2.split('/')[-1]
-            
             with open(out_file_name,"w") as download:
                 download.write('#!/usr/bin/env bash\n')
                 download.write(f"curl -L {fastq1} -o {output_data_directory}/{fastq1_out}\n")
@@ -291,10 +284,9 @@ def create_query(term):
         results_idx = [*range(total_result+1)]
         # chunks of 500 ids => since the index is starting from 0, 'retmax' should be 499
         chunks = list(split_list(results_idx, 500)) 
-        # print (f"Found total {total_result} results.")
-        print (f"Parsing the response from the server.")
+        print ("Parsing the response from the server.")
         if total_result > 500:
-            print (f"Creating batch queries due to esearch API's limitation.")
+            print ("Creating batch queries due to esearch API's limitation.")
         for set, chunk in enumerate(chunks):
             try:
                 sra_uids=None
