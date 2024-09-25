@@ -2,7 +2,6 @@
 
 import os
 import requests
-from requests.exceptions import HTTPError
 import time
 import urllib.parse
 import re
@@ -214,8 +213,8 @@ def parse_sample_info(sample_json):
                             sra_accn = id_accn
                 if (sampledata['document']) and (sra_accn is not None):
                     sample_info_dict[sra_accn]=sampledata['document']
-            except:
-                print(f"Error parsing {id}")
+            except Exception as err:
+                print(f"Error parsing {id} ({err})")
     return (sample_info_dict)
 
 
@@ -238,8 +237,8 @@ def parse_run_info(run_json):
                 else:
                     run_to_sample_ids[runs['document']['Run']['@acc']]=sample_accn
                     run_info_dict[runs['document']['Run']['@acc']]={'total_spots':runs['document']['Run']['@total_spots'],'total_bases':runs['document']['Run']['@total_bases'],'exp_info':expxml}
-            except:
-                print(f"Error parsing {id}")
+            except Exception as err:
+                print(f"Error parsing {id} ({err})")
     return (run_info_dict,run_to_sample_ids)
 
 
@@ -290,7 +289,6 @@ def create_query(term):
         querykey = esearch_response['esearchresult']['querykey']
         webenv = esearch_response['esearchresult']['webenv']
         results_idx = [*range(total_result+1)]
-        all_sra_uids =[]
         # chunks of 500 ids => since the index is starting from 0, 'retmax' should be 499
         chunks = list(split_list(results_idx, 500)) 
         # print (f"Found total {total_result} results.")
@@ -335,8 +333,8 @@ def create_query(term):
                             write_quick_json(run_to_sample_ids,runinfo)
                             print('')
                             print (f"Finished query set [{set+1}/{len(chunks)}]")
-            except:
-                print (f"Error generating summary from query set [{set+1}/{len(chunks)}].")
+            except Exception as err:
+                print (f"Error generating summary from query set [{set+1}/{len(chunks)}]. ({err})")
 
 
 def find_matches (query_term):
@@ -382,13 +380,13 @@ if args.query:
             if isinstance(qnames, list):
                 for word in qnames:
                     if find_matches(word):
-                        if not category in hits_dict:
+                        if category not in hits_dict:
                             hits_dict[category]=find_matches(word)
                         else:
                             hits_dict[category]= hits_dict[category]+find_matches(word)
             elif isinstance(qnames, str):
                 if find_matches(qnames):
-                    if not category in hits_dict:
+                    if category not in hits_dict:
                         hits_dict[category]=find_matches(qnames)
                     else:
                         hits_dict[category]= hits_dict[category]+find_matches(qnames)
@@ -408,7 +406,7 @@ if args.query:
             print (f"Locating fastq file(s) for {run}", end='\r')
             try:
                 download_sra(run)
-            except:
-                print (f"Couldn't locate fastq file(s) for {run}", end='\n')
+            except Exception as err:
+                print (f"Couldn't locate fastq file(s) for {run}. ({err})", end='\n')
 else:
-    print (f"Invalid input provided.", end='\n')
+    print (f"Invalid input provided. {args.query}", end='\n')
