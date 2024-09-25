@@ -126,25 +126,29 @@ if args.output:
     output_stats_directory=out_dir+'/sra_data/'
 
 
-def make_request (url,params) :
-    retries = 1
+def make_request(url, params, max_retries=3):
+    retries = 0
     success = False
     headers = {
         'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8"
     }
-    while not success and retries <= 1:
+    while not success and retries < max_retries:
         try:
             response = requests.post(url, data=params, headers=headers)
             response.raise_for_status()
             jsonResponse = response.json(strict=False)
-            return (jsonResponse)
             success = True
+            return jsonResponse
         except Exception as err:
-            print(f'{err}')
-            wait = retries * 2
-            print (f"Retrying attempt {retries}")
-            time.sleep(wait)
-            retries+=1
+            print(f'Error: {err}')
+            retries += 1
+            if retries < max_retries:
+                wait = retries * 2
+                print(f"Retrying attempt {retries} after {wait} seconds")
+                time.sleep(wait)
+            else:
+                print("Max retries reached. Request failed.")
+    return None
 
 
 def convert_sra_uids_to_biosample_uids(uids):
@@ -152,11 +156,12 @@ def convert_sra_uids_to_biosample_uids(uids):
     elink_params = urllib.parse.urlencode({'dbfrom':'sra','db':'biosample','retmode':'json','id':uids}, safe=',')
     biosample_uids=[]
     sra_to_biosample_response = make_request(elink_base_url,elink_params)
-    if isinstance(sra_to_biosample_response['linksets'], list):
-        if isinstance(sra_to_biosample_response['linksets'][0]['linksetdbs'], list):
-            if (sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links']):
-                biosample_uids = ",".join(sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links'])
-                return biosample_uids
+    if sra_to_biosample_response and 'linksets' in sra_to_biosample_response:
+        if isinstance(sra_to_biosample_response['linksets'], list):
+            if isinstance(sra_to_biosample_response['linksets'][0]['linksetdbs'], list):
+                if (sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links']):
+                    biosample_uids = ",".join(sra_to_biosample_response['linksets'][0]['linksetdbs'][0]['links'])
+                    return biosample_uids
 
 
 def write_quick_json(run_to_sam_accn, run_info_items):
@@ -277,7 +282,7 @@ def download_sra(run_accn):
 def create_query(term):
     esearch_params = {'db': 'sra','usehistory':'y','retmode':'json','term':term}
     esearch_response = make_request(esearch_base_url,esearch_params)
-    if esearch_response['esearchresult']:
+    if esearch_response and 'esearchresult' in esearch_response:
         total_result = int(esearch_response['esearchresult']['count'])
         querykey = esearch_response['esearchresult']['querykey']
         webenv = esearch_response['esearchresult']['webenv']
@@ -296,7 +301,7 @@ def create_query(term):
                 # since the chunk index is starting from 0, 'retmax' should be 499
                 sra_esummary_params = {'db': 'sra','retmode':'json','query_key':querykey,'WebEnv':webenv,'retstart':chunk[0],'retmax':499}
                 sra_esummary_response = make_request(esummary_base_url,sra_esummary_params)
-                if sra_esummary_response['result']:
+                if sra_esummary_response and 'result' in sra_esummary_response:
                     run_json = sra_esummary_response['result']
                     sra_uids = ",".join(sra_esummary_response['result']['uids'])
                     if args.mode == 'full':
@@ -309,7 +314,7 @@ def create_query(term):
                         if biosample_uids is not None:
                             biosample_esummary_params = urllib.parse.urlencode({'dbfrom':'sra','db':'biosample','retmode':'json','id':biosample_uids}, safe=',')
                             biosample_response = make_request(esummary_base_url,biosample_esummary_params)
-                            if (biosample_response['result']):
+                            if biosample_response and 'result' in biosample_response:
                                 sample_json = biosample_response['result']
                         if run_json is not None and sample_json is not None:
                             runinfo, run_to_sample_ids = parse_run_info(run_json)
@@ -327,7 +332,8 @@ def create_query(term):
                             print (f"Finished query set [{set+1}/{len(chunks)}]")
             except Exception as err:
                 print (f"Error generating summary from query set [{set+1}/{len(chunks)}]. ({err})")
-
+    else:
+        print("Error: No valid response from esearch request.")
 
 def find_matches (query_term):
     hits_found=[]
