@@ -262,7 +262,9 @@ def download_sra(run_accn):
             for json_set in jsonResponse:
                 if json_set['fastq_ftp']:
                     if ';' in json_set['fastq_ftp']:
-                        fastq1,fastq2=json_set['fastq_ftp'].split(';')
+                        fastqs = json_set['fastq_ftp'].split(';')
+                        fastq1 = fastqs[-2]
+                        fastq2 = fastqs[-1]
                         break
                     else:
                         fastq1 =json_set['fastq_ftp']
