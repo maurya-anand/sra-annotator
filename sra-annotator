@@ -120,10 +120,10 @@ if args.output:
         out_dir = cwd
     else:
         out_dir= os.path.abspath(out_dir)
-    output_json_directory = out_dir+'/sra_data/annotation_json'
-    output_table_directory = out_dir+'/sra_data/annotation_text'
-    output_data_directory = out_dir+'/sra_data/fastq_source'
-    output_stats_directory = out_dir+'/sra_data/'
+        output_json_directory = os.path.join(out_dir, 'sra_data', 'annotation_json')
+        output_table_directory = os.path.join(out_dir, 'sra_data', 'annotation_text')
+        output_data_directory = os.path.join(out_dir, 'sra_data', 'fastq_source')
+        output_stats_directory = os.path.join(out_dir, 'sra_data')
 
 
 def make_request(url, params, max_retries = 3):
