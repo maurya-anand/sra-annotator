@@ -1,5 +1,7 @@
 # About
 
+[![DOI](https://zenodo.org/badge/574965717.svg)](https://doi.org/10.5281/zenodo.13890889)
+
 A command-line tool for retrieving annotations from the NCBI SRA database.
 
 It uses NCBI's Entrez Programming Utilities under the hood to query and retrieve Run-level and Sample-level annotation from the SRA database. Learn more about E-Utilities here: <https://www.ncbi.nlm.nih.gov/books/NBK25499/>
